@@ -1,9 +1,9 @@
 import pandas as pd
+import numpy as np
 from datetime import datetime
 from matplotlib import pyplot
 from scipy import stats
-import numpy as np
-
+from sklearn.preprocessing import MinMaxScaler
 
 def parse_timestamp(time_in_secs):
     return datetime.fromtimestamp(float(time_in_secs))
@@ -19,6 +19,15 @@ def prepare_data():
     dataset = dataset[555:]
     dataset.to_csv('dataset/prepared_train_electricity.csv')
     print(dataset.head(5))
+
+
+def scale_data():
+    dataset = pd.read_csv(
+        'dataset/prepared_train_electricity.csv', header=0, index_col=0)
+    scaler = MinMaxScaler(feature_range=(0, 1), copy=False)
+    scaler.fit(dataset)
+    scaler.fit_transform(dataset)
+    dataset.to_csv('dataset/prepared_train_electricity.csv')
 
 
 def create_plots():
@@ -68,5 +77,5 @@ def remove_outliers():
     print(dataset)
     dataset.to_csv('dataset/prepared_train_electricity.csv')
 
-
+# scale_data()
 create_plots()
