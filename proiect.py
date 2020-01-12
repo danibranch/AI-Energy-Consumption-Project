@@ -9,23 +9,18 @@ def parse_timestamp(time_in_secs):
     return datetime.fromtimestamp(float(time_in_secs))
 
 
-def prepare_data(save_to_csv=False):
-    dataset = pd.read_csv("dataset/train_electricity.csv",
-                          parse_dates=['Date'], date_parser=parse_timestamp, index_col=0)
-
+def prepare_data(dataset, save_to_csv=False):
     dataset.columns = ['consumption', 'coal', 'gas', 'hidroelectric',
                        'nuclear', 'wind', 'solar', 'biomass', 'productions']
     dataset.index.name = 'date'
     dataset = dataset[555:]
-    print(dataset.head(5))
     if save_to_csv:
         dataset.to_csv('dataset/prepared_train_electricity.csv')
     return dataset
 
 
-def scale_data(save_to_csv=False):
-    dataset = pd.read_csv(
-        'dataset/prepared_train_electricity.csv', header=0, index_col=0)
+def scale_data(dataset, save_to_csv=False):
+
     scaler = MinMaxScaler(feature_range=(0, 1), copy=False)
     scaler.fit(dataset)
     scaler.fit_transform(dataset)
@@ -64,24 +59,16 @@ def create_consumption_production_plot():
     pyplot.show()
 
 
-def remove_outliers(save_to_csv=False):
-    dataset = pd.read_csv(
-        'dataset/prepared_train_electricity.csv', header=0, index_col=0)
-    # iqr = stats.iqr(dataset, axis=0)
-
+def remove_outliers(dataset, save_to_csv=False):
     Q1 = dataset.quantile(0.25)
     Q3 = dataset.quantile(0.75)
     IQR = Q3 - Q1
-    print(IQR)
-
     dataset = dataset[~((dataset < (Q1 - 1.5 * IQR)) |
                         (dataset > (Q3 + 1.5 * IQR))).any(axis=1)]
-
-    print(dataset)
     if save_to_csv:
         dataset.to_csv('dataset/prepared_train_electricity.csv')
     return dataset
 
 
 # scale_data()
-create_plots()
+# create_plots()
