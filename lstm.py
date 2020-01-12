@@ -1,9 +1,9 @@
 import pandas as pd
+from matplotlib import pyplot
+from pandas import DataFrame, concat
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import LSTM
 from tensorflow.keras.models import Sequential
-from pandas import DataFrame, concat
-from matplotlib import pyplot
 
 import proiect
 
@@ -61,12 +61,12 @@ model = Sequential()
 model.add(LSTM(50, input_shape=(train_X.shape[1], train_X.shape[2])))
 model.add(Dense(1))
 model.compile(loss='mae', optimizer='adam')
+model.load_weights('cp')
 # fit network
-history = model.fit(train_X, train_y, epochs=50, batch_size=72, validation_data=(test_X, test_y), verbose=2,
+history = model.fit(train_X, train_y, epochs=50, batch_size=72, verbose=2,
                     shuffle=False)
-model.save('model.h5')
+model.save_weights('cp')
 # plot history
 pyplot.plot(history.history['loss'], label='train')
-pyplot.plot(history.history['val_loss'], label='test')
 pyplot.legend()
 pyplot.show()
