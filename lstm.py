@@ -1,121 +1,72 @@
-import proiect
 import pandas as pd
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import LSTM
+from tensorflow.keras.models import Sequential
+from pandas import DataFrame, concat
+from matplotlib import pyplot
+
+import proiect
 
 
-# evaluate one or more weekly forecasts against expected values
-def evaluate_forecasts(actual, predicted):
-    scores = list()
-    # calculate an RMSE score for each day
-    for i in range(actual.shape[1]):
-        # calculate mse
-        mse = mean_squared_error(actual[:, i], predicted[:, i])
-        scores.append(mse)
-    # calculate overall MSE
-    s = 0
-    for row in range(actual.shape[0]):
-        for col in range(actual.shape[1]):
-            s += (actual[row, col] - predicted[row, col]) ** 2
-    score = sqrt(s / (actual.shape[0] * actual.shape[1]))
-    return score, scores
-
-
-# summarize scores
-def summarize_scores(name, score, scores):
-    s_scores = ', '.join(['%.1f' % s for s in scores])
-    print('%s: [%.3f] %s' % (name, score, s_scores))
-
-
-# convert history into inputs and outputs
-def to_supervised(train, n_input, n_out=7):
-    # flatten data
-    data = train.reshape((train.shape[0] * train.shape[1], train.shape[2]))
-    X, y = list(), list()
-    in_start = 0
-    # step over the entire history one time step at a time
-    for _ in range(len(data)):
-        # define the end of the input sequence
-        in_end = in_start + n_input
-        out_end = in_end + n_out
-        # ensure we have enough data for this instance
-        if out_end <= len(data):
-            X.append(data[in_start:in_end, :])
-            y.append(data[in_end:out_end, 0])
-        # move along one time step
-        in_start += 1
-    return array(X), array(y)
-
-
-# train the model
-def build_model(train, n_input):
-    # prepare data
-    train_x, train_y = to_supervised(train, n_input)
-    # define parameters
-    verbose, epochs, batch_size = 1, 50, 16
-    n_timesteps, n_features, n_outputs = train_x.shape[1], train_x.shape[2], train_y.shape[1]
-    # reshape output into [samples, timesteps, features]
-    train_y = train_y.reshape((train_y.shape[0], train_y.shape[1], 1))
-    # define model
-    model = Sequential()
-    model.add(LSTM(200, activation='relu', input_shape=(n_timesteps, n_features)))
-    model.add(RepeatVector(n_outputs))
-    model.add(LSTM(200, activation='relu', return_sequences=True))
-    model.add(TimeDistributed(Dense(100, activation='relu')))
-    model.add(TimeDistributed(Dense(1)))
-    model.compile(loss='mse', optimizer='adam')
-    # fit network
-    model.fit(train_x, train_y, epochs=epochs, batch_size=batch_size, verbose=verbose)
-    return model
-
-
-# make a forecast
-def forecast(model, history, n_input):
-    # flatten data
-    data = array(history)
-    data = data.reshape((data.shape[0] * data.shape[1], data.shape[2]))
-    # retrieve last observations for input data
-    input_x = data[-n_input:, :]
-    # reshape into [1, n_input, n]
-    input_x = input_x.reshape((1, input_x.shape[0], input_x.shape[1]))
-    # forecast the next week
-    yhat = model.predict(input_x, verbose=0)
-    # we only want the vector forecast
-    yhat = yhat[0]
-    return yhat
-
-
-# evaluate a single model
-def evaluate_model(train, test, n_input):
-    # fit model
-    model = build_model(train, n_input)
-    # history is a list of weekly data
-    history = [x for x in train]
-    # walk-forward validation over each week
-    predictions = list()
-    for i in range(len(test)):
-        # predict the week
-        yhat_sequence = forecast(model, history, n_input)
-        # store the predictions
-        predictions.append(yhat_sequence)
-        # get real observation and add to history for predicting the next week
-        history.append(test[i, :])
-    # evaluate predictions days for each week
-    predictions = array(predictions)
-    score, scores = evaluate_forecasts(test[:, :, 0], predictions)
-    return score, scores
+# convert series to supervised learning
+def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):
+    n_vars = 1 if type(data) is list else data.shape[1]
+    df = DataFrame(data)
+    cols, names = list(), list()
+    # input sequence (t-n, ... t-1)
+    for i in range(n_in, 0, -1):
+        cols.append(df.shift(i))
+        names += [('var%d(t-%d)' % (j + 1, i)) for j in range(n_vars)]
+    # forecast sequence (t, t+1, ... t+n)
+    for i in range(0, n_out):
+        cols.append(df.shift(-i))
+        if i == 0:
+            names += [('var%d(t)' % (j + 1)) for j in range(n_vars)]
+        else:
+            names += [('var%d(t+%d)' % (j + 1, i)) for j in range(n_vars)]
+    # put it all together
+    agg = concat(cols, axis=1)
+    agg.columns = names
+    # drop rows with NaN values
+    if dropnan:
+        agg.dropna(inplace=True)
+    return agg
 
 
 train = pd.read_csv('dataset/train_electricity.csv', header=0, index_col=0)
-test = pd.read_csv('dataset/test_electricity.csv', header=0, index_col=0)
-# train = proiect.prepare_data(train)
-# TODO: Belu reindex
+train = proiect.rearrange_cols(train)
 train = proiect.remove_outliers(train)
-train = proiect.scale_data(train)
+scaled = proiect.scale_data(train.values)
+reframed = series_to_supervised(scaled, 1, 1)
+reframed.drop(reframed.columns[[8, 9, 10, 11, 12, 13, 14, 15, 16]], axis=1, inplace=True)
+train = reframed.values
 
-n_input = 9
-score, scores = evaluate_model(train, test, n_input)
-# summarize scores
-summarize_scores('lstm', score, scores)
-# plot scores
-days = ['sun', 'mon', 'tue', 'wed', 'thr', 'fri', 'sat']
-pyplot.plot(days, scores, marker='o', label='lstm')
+test = pd.read_csv('dataset/test_electricity.csv', header=0, index_col=0)
+scaled = proiect.scale_data(test.values)
+reframed = series_to_supervised(scaled, 1, 1)
+# TODO: Modify
+reframed.drop(reframed.columns[[8, 9, 10, 11, 12, 13, 14]], axis=1, inplace=True)
+test = reframed.values
+
+# split into input and outputs
+train_X, train_y = train[:, :-1], train[:, -1]
+test_X, test_y = test[:, :-1], test[:, -1]
+# reshape input to be 3D [samples, timesteps, features]
+train_X = train_X.reshape((train_X.shape[0], 1, train_X.shape[1]))
+test_X = test_X.reshape((test_X.shape[0], 1, test_X.shape[1]))
+print(train_X.shape, train_y.shape, test_X.shape, test_y.shape)
+# design network
+
+model = Sequential()
+model.add(LSTM(50, input_shape=(train_X.shape[1], train_X.shape[2])))
+model.add(Dense(1))
+model.compile(loss='mae', optimizer='adam')
+# fit network
+history = model.fit(train_X, train_y, epochs=50, batch_size=72, validation_data=(test_X, test_y), verbose=2,
+                    shuffle=False)
+model.save('model.h5')
+# plot history
+pyplot.plot(history.history['loss'], label='train')
+pyplot.plot(history.history['val_loss'], label='test')
+pyplot.legend()
 pyplot.show()

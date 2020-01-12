@@ -20,7 +20,6 @@ def prepare_data(dataset, save_to_csv=False):
 
 
 def scale_data(dataset, save_to_csv=False):
-
     scaler = MinMaxScaler(feature_range=(0, 1), copy=False)
     scaler.fit(dataset)
     scaler.fit_transform(dataset)
@@ -59,6 +58,15 @@ def create_consumption_production_plot():
     pyplot.show()
 
 
+def rearrange_cols(dataset, save_to_csv=False):
+    cols = dataset.columns.tolist()
+    cols = cols[1:] + cols[0:1]
+    dataset = dataset[cols]
+    if save_to_csv:
+        dataset.to_csv('dataset/prepared_train_electricity_fin2.csv')
+    return dataset
+
+
 def remove_outliers(dataset, save_to_csv=False):
     Q1 = dataset.quantile(0.25)
     Q3 = dataset.quantile(0.75)
@@ -68,7 +76,6 @@ def remove_outliers(dataset, save_to_csv=False):
     if save_to_csv:
         dataset.to_csv('dataset/prepared_train_electricity.csv')
     return dataset
-
 
 # scale_data()
 # create_plots()
