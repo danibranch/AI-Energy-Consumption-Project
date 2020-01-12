@@ -1,15 +1,15 @@
-import pandas as pd
-import numpy as np
 from datetime import datetime
+
+import pandas as pd
 from matplotlib import pyplot
-from scipy import stats
 from sklearn.preprocessing import MinMaxScaler
+
 
 def parse_timestamp(time_in_secs):
     return datetime.fromtimestamp(float(time_in_secs))
 
 
-def prepare_data():
+def prepare_data(save_to_csv=False):
     dataset = pd.read_csv("dataset/train_electricity.csv",
                           parse_dates=['Date'], date_parser=parse_timestamp, index_col=0)
 
@@ -17,17 +17,21 @@ def prepare_data():
                        'nuclear', 'wind', 'solar', 'biomass', 'productions']
     dataset.index.name = 'date'
     dataset = dataset[555:]
-    dataset.to_csv('dataset/prepared_train_electricity.csv')
     print(dataset.head(5))
+    if save_to_csv:
+        dataset.to_csv('dataset/prepared_train_electricity.csv')
+    return dataset
 
 
-def scale_data():
+def scale_data(save_to_csv=False):
     dataset = pd.read_csv(
         'dataset/prepared_train_electricity.csv', header=0, index_col=0)
     scaler = MinMaxScaler(feature_range=(0, 1), copy=False)
     scaler.fit(dataset)
     scaler.fit_transform(dataset)
-    dataset.to_csv('dataset/prepared_train_electricity.csv')
+    if save_to_csv:
+        dataset.to_csv('dataset/scaled_train_electricity.csv')
+    return dataset
 
 
 def create_plots():
@@ -55,16 +59,15 @@ def create_consumption_production_plot():
 
     pyplot.figure()
     for group in groups:
-        pyplot.plot(dataset.index[:], values[:,group])
+        pyplot.plot(dataset.index[:], values[:, group])
 
     pyplot.show()
 
 
-def remove_outliers():
+def remove_outliers(save_to_csv=False):
     dataset = pd.read_csv(
         'dataset/prepared_train_electricity.csv', header=0, index_col=0)
     # iqr = stats.iqr(dataset, axis=0)
-    # print(iqr)
 
     Q1 = dataset.quantile(0.25)
     Q3 = dataset.quantile(0.75)
@@ -75,7 +78,10 @@ def remove_outliers():
                         (dataset > (Q3 + 1.5 * IQR))).any(axis=1)]
 
     print(dataset)
-    dataset.to_csv('dataset/prepared_train_electricity.csv')
+    if save_to_csv:
+        dataset.to_csv('dataset/prepared_train_electricity.csv')
+    return dataset
+
 
 # scale_data()
 create_plots()
