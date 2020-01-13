@@ -1,6 +1,9 @@
 import pandas as pd
 from matplotlib import pyplot
+from numpy import concatenate
 from pandas import DataFrame, concat
+from sklearn.metrics import mean_squared_error
+from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import LSTM
 from tensorflow.keras.models import Sequential
@@ -33,18 +36,19 @@ def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):
     return agg
 
 
+scaler = MinMaxScaler(feature_range=(0, 1))
 train = pd.read_csv('dataset/train_electricity.csv', header=0, index_col=0)
 train = proiect.rearrange_cols(train)
 train = proiect.remove_outliers(train)
-scaled = proiect.scale_data(train.values)
+scaled = scaler.fit_transform(train.values)
 reframed = series_to_supervised(scaled, 1, 1)
 reframed.drop(reframed.columns[[8, 9, 10, 11, 12, 13, 14, 15, 16]], axis=1, inplace=True)
 train = reframed.values
 
 test = pd.read_csv('dataset/test_electricity.csv', header=0, index_col=0)
-scaled = proiect.scale_data(test.values)
+scaled = scaler.fit_transform(test.values)
 reframed = series_to_supervised(scaled, 1, 1)
-# TODO: Modify
+# TODO: Modify to get only the desired columns
 reframed.drop(reframed.columns[[8, 9, 10, 11, 12, 13, 14]], axis=1, inplace=True)
 test = reframed.values
 
@@ -68,5 +72,27 @@ history = model.fit(train_X, train_y, epochs=50, batch_size=72, verbose=2,
 model.save_weights('cp')
 # plot history
 pyplot.plot(history.history['loss'], label='train')
+pyplot.legend()
+pyplot.show()
+
+# make a prediction
+yhat = model.predict(test_X)
+test_X = test_X.reshape((test_X.shape[0], test_X.shape[2]))
+# invert scaling for forecast
+inv_yhat = concatenate((yhat, test_X[:, 1:]), axis=1)
+inv_yhat = scaler.inverse_transform(inv_yhat)
+inv_yhat = inv_yhat[:, 0]
+# invert scaling for actual
+test_y = test_y.reshape((len(test_y), 1))
+inv_y = concatenate((test_y, test_X[:, 1:]), axis=1)
+
+inv_y = scaler.inverse_transform(inv_y)
+inv_y = inv_y[:, 0]
+# calculate MSE
+mse = mean_squared_error(inv_y, inv_yhat)
+print('Test MSE: %.3f' % mse)
+
+pyplot.plot(inv_yhat, label='predicted')
+pyplot.plot(inv_y, label='actual')
 pyplot.legend()
 pyplot.show()
